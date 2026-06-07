@@ -1,0 +1,15 @@
+.env
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv/
+scripts/
+*.md
+Dockerfile
+.dockerignore
+.webappignore
+phi3-endpoint.yml
