@@ -28,16 +28,18 @@ jobs:
       - name: ACR ログイン
         run: az acr login --name bungoregistry
 
-      - name: Docker ビルド & プッシュ
+      - name: Docker ビルド & プッシュ（SHA タグ）
         run: |
+          IMAGE=bungoregistry.azurecr.io/bungo-rag
           docker buildx build \
             --platform linux/amd64 \
-            -t bungoregistry.azurecr.io/bungo-rag:latest \
+            -t "${IMAGE}:${{ github.sha }}" \
+            -t "${IMAGE}:latest" \
             --push .
 
-      - name: Container App デプロイ
+      - name: Container App デプロイ（新リビジョン強制）
         run: |
           az containerapp update \
             --name bungo-app \
             --resource-group bungo-rag-rg \
-            --image bungoregistry.azurecr.io/bungo-rag:latest
+            --image bungoregistry.azurecr.io/bungo-rag:${{ github.sha }}
