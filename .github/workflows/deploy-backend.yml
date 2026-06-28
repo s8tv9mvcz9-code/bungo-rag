@@ -1,0 +1,51 @@
+name: Build & Deploy Backend API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'app/rag.py'
+      - 'requirements.txt'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure ログイン
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Container Apps 拡張機能インストール
+        run: az extension add --name containerapp --yes --only-show-errors
+
+      - name: ACR ログイン
+        run: az acr login --name bungoregistry
+
+      - name: Docker ビルド & プッシュ（SHA タグ, backend/Dockerfile）
+        run: |
+          IMAGE=bungoregistry.azurecr.io/bungo-rag-api
+          docker buildx build \
+            --platform linux/amd64 \
+            -f backend/Dockerfile \
+            -t "${IMAGE}:${{ github.sha }}" \
+            -t "${IMAGE}:latest" \
+            --push .
+
+      - name: Container App デプロイ（存在すれば更新／無ければ案内）
+        run: |
+          IMAGE=bungoregistry.azurecr.io/bungo-rag-api:${{ github.sha }}
+          if az containerapp show --name bungo-api --resource-group bungo-rag-rg >/dev/null 2>&1; then
+            az containerapp update \
+              --name bungo-api \
+              --resource-group bungo-rag-rg \
+              --image "${IMAGE}"
+          else
+            echo "::warning::bungo-api が未作成です。初回のみ backend/deploy-api.sh をローカルで実行してください（シークレット注入のため）。今回はイメージ push のみ完了しました。"
+          fi
