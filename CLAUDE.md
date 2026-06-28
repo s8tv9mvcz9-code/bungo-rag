@@ -8,12 +8,25 @@
 ## アーキテクチャ
 
 ```
-app/app.py       — Streamlit UI
-app/rag.py       — RAGコア（検索 + ストリーミング生成）
-requirements.txt — Python依存
-Dockerfile       — コンテナ定義
+app/app.py       — Streamlit UI（Web版）
+app/rag.py       — RAGコア（検索 + ストリーミング生成）※全フロントで共有
+backend/main.py  — FastAPI：rag.py を NDJSON ストリーミングAPI化（Androidアプリ用）
+android/         — Kotlin + Jetpack Compose ネイティブアプリ（backend を叩く）
+requirements.txt — Python依存（RAGコア）
+Dockerfile       — Streamlit版コンテナ定義
+backend/Dockerfile — API版コンテナ定義
 .github/workflows/deploy.yml — CI/CDパイプライン
 ```
+
+### フロントエンド構成
+
+| フロント | 実装 | RAG処理 |
+|---|---|---|
+| Web | `app/app.py`（Streamlit） | `app/rag.py` を直接 import |
+| Android | `android/`（Compose） | `backend/`（FastAPI）経由で HTTP |
+
+`app/rag.py` が唯一の RAG ロジック。Web は直接呼び、Android は backend 経由で呼ぶ。
+詳細は `backend/README.md` / `android/README.md` を参照。
 
 ### 外部サービス
 
