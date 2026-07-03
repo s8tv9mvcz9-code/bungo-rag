@@ -1,0 +1,61 @@
+name: Build Local Search Index
+
+# 青空文庫からローカル検索インデックス（corpus/）を構築してコミットする。
+# 埋め込みは OpenAI 互換 API（推奨: Google AI Studio の無料キー）を使う。
+#
+# 必要な Repository secrets:
+#   EMBED_API_KEY   … プロバイダの API キー（例: Google AI Studio）
+# 任意の Repository variables（未設定時は Gemini の既定値）:
+#   EMBED_ENDPOINT  … 例 https://generativelanguage.googleapis.com/v1beta/openai/
+#   EMBED_MODEL     … 例 gemini-embedding-001
+#   EMBED_DIMENSIONS… 例 1536
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '対象作品数'
+        default: '50'
+      styles:
+        description: '文字遣い（カンマ区切り）'
+        default: '旧字旧仮名'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # corpus/ をコミットするため
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 依存インストール
+        run: pip install numpy openai
+
+      - name: インデックス構築
+        env:
+          EMBED_API_KEY: ${{ secrets.EMBED_API_KEY }}
+          EMBED_ENDPOINT: ${{ vars.EMBED_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/' }}
+          EMBED_DEPLOYMENT: ${{ vars.EMBED_MODEL || 'gemini-embedding-001' }}
+          EMBED_DIMENSIONS: ${{ vars.EMBED_DIMENSIONS || '1536' }}
+        run: |
+          python scripts/build_index.py \
+            --limit "${{ github.event.inputs.limit }}" \
+            --styles "${{ github.event.inputs.styles }}" \
+            --sleep 1.0
+
+      - name: corpus/ をコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add corpus/
+          if git diff --cached --quiet; then
+            echo "変更なし"
+          else
+            git commit -m "chore: 検索インデックスを再構築 (limit=${{ github.event.inputs.limit }}, styles=${{ github.event.inputs.styles }})"
+            git push
+          fi

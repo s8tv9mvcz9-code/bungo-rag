@@ -1,6 +1,8 @@
 openai>=1.30.0
-azure-search-documents>=11.4.0
-azure-core>=1.30.0
+numpy>=1.26.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 streamlit>=1.35.0
+# Azure バックエンド（VECTOR_BACKEND=azure）を使う場合のみ必要
+azure-search-documents>=11.4.0
+azure-core>=1.30.0

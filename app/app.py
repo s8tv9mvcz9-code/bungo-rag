@@ -80,13 +80,15 @@ for msg in st.session_state.messages:
 
 # ── 入力欄 ───────────────────────────────────────────────
 if prompt := st.chat_input("依頼を入力してください（例：「月夜の情景を文語体で」）"):
-
-    # ユーザーメッセージ表示
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
-    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # 生成
+# ── 生成（手入力・例文ボタン共通の経路）────────────────────
+# 末尾がユーザー発言なら未応答なので生成する。例文ボタンは rerun 経由でここに来る。
+if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+    prompt = st.session_state.messages[-1]["content"]
+
     with st.chat_message("assistant"):
         placeholder = st.empty()
         full_response = ""
