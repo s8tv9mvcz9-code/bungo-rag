@@ -6,3 +6,7 @@ streamlit>=1.35.0
 # Azure バックエンド（VECTOR_BACKEND=azure）を使う場合のみ必要
 azure-search-documents>=11.4.0
 azure-core>=1.30.0
+# Claude（Azure AI Foundry）で生成する場合のみ必要（CHAT_BACKEND=foundry）
+anthropic>=0.69.0
+# FOUNDRY_AUTH=entra（キーレス認証）を使う場合のみ必要
+azure-identity>=1.19.0

@@ -94,6 +94,90 @@ def _chat_client():
         )
     return OpenAI(base_url=CHAT_ENDPOINT, api_key=CHAT_KEY)
 
+
+_foundry_client_cached = None
+
+
+def _chat_backend() -> str:
+    """chat 生成のバックエンド: 'foundry'（Azure AI Foundry の Claude）/ 'openai'（OpenAI互換）。
+
+    CHAT_BACKEND 未指定なら、Foundry リソースが設定されていれば foundry、なければ openai。
+    """
+    backend = os.environ.get("CHAT_BACKEND", "").lower()
+    if backend in ("foundry", "anthropic", "claude"):
+        return "foundry"
+    if backend in ("openai", "azure", "compat"):
+        return "openai"
+    if os.environ.get("ANTHROPIC_FOUNDRY_RESOURCE") or os.environ.get("FOUNDRY_RESOURCE"):
+        return "foundry"
+    return "openai"
+
+
+def _foundry_client():
+    """Azure AI Foundry の Claude を叩く AnthropicFoundry クライアント（遅延生成）。
+
+    認証:
+      - 既定は API キー（ANTHROPIC_FOUNDRY_API_KEY または CHAT_API_KEY）
+      - FOUNDRY_AUTH=entra で Microsoft Entra ID（キーレス、要 azure-identity）
+    エンドポイントは resource から https://{resource}.services.ai.azure.com/anthropic/ が構築される。
+    """
+    global _foundry_client_cached
+    if _foundry_client_cached is not None:
+        return _foundry_client_cached
+    from anthropic import AnthropicFoundry  # 遅延import（ゼロコスト経路に不要な依存を避ける）
+
+    resource = os.environ.get("ANTHROPIC_FOUNDRY_RESOURCE") or os.environ.get("FOUNDRY_RESOURCE")
+    if not resource:
+        raise RuntimeError(
+            "Foundry バックエンドには ANTHROPIC_FOUNDRY_RESOURCE（Foundry リソース名）が必要です。"
+        )
+
+    if os.environ.get("FOUNDRY_AUTH", "").lower() == "entra":
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+        token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(), "https://ai.azure.com/.default"
+        )
+        _foundry_client_cached = AnthropicFoundry(
+            resource=resource, azure_ad_token_provider=token_provider
+        )
+    else:
+        api_key = os.environ.get("ANTHROPIC_FOUNDRY_API_KEY") or CHAT_KEY
+        if not api_key:
+            raise RuntimeError(
+                "Foundry の API キー未設定: ANTHROPIC_FOUNDRY_API_KEY か CHAT_API_KEY を設定"
+                "（または FOUNDRY_AUTH=entra でキーレス認証）。"
+            )
+        _foundry_client_cached = AnthropicFoundry(api_key=api_key, resource=resource)
+    return _foundry_client_cached
+
+
+def _stream_foundry(augmented_user: str, history: List[dict]) -> Iterator[str]:
+    """Claude（Azure AI Foundry）で Messages API ストリーミング生成。
+
+    - Opus 4.8 は temperature/top_p を受け付けない（送ると 400）ため指定しない。
+    - thinking は省略（この創作タスクでは不要。低レイテンシ・低コスト優先）。
+    - system はトップレベル引数、messages は user/assistant のみ。
+    """
+    model = CHAT_DEPLOYMENT or "claude-opus-4-8"  # Foundry のデプロイ名（既定はモデルID）
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in history[-8:]
+        if m.get("role") in ("user", "assistant")
+    ]
+    messages.append({"role": "user", "content": augmented_user})
+
+    stream = _foundry_client().messages.create(
+        model=model,
+        max_tokens=1500,
+        system=SYSTEM_PROMPT,
+        messages=messages,
+        stream=True,
+    )
+    for event in stream:
+        if event.type == "content_block_delta" and getattr(event.delta, "type", None) == "text_delta":
+            yield event.delta.text
+
+
 # ── システムプロンプト ────────────────────────────────────
 SYSTEM_PROMPT = """あなたは旧字旧仮名の文語体で作文・変換する専門家です。
 あなた自身の知識と能力が生成の主体であり、参照例はあくまで文体調整のヒントにすぎません。
@@ -204,6 +288,10 @@ def stream_answer(
         f"前置きは不要。変換・作文した文章そのものから書き始めよ。\n\n"
         f"{user_message}"
     )
+
+    # Claude（Azure AI Foundry）バックエンドは Messages API 経路へ分岐
+    if _chat_backend() == "foundry":
+        return _stream_foundry(augmented_user, history), chunks
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     # 直近4ターンの会話履歴を追加（コンテキスト節約）
