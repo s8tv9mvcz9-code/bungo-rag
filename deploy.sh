@@ -14,24 +14,26 @@ if [ -f "$(dirname "$0")/.env" ]; then
   set +a
 fi
 
-REGISTRY="bungoregistry.azurecr.io"
+# イメージは GitHub Container Registry（ghcr.io, public）。ACR Basic($5/月)は廃止済み。
+REGISTRY="ghcr.io/s8tv9mvcz9-code"
 IMAGE="${REGISTRY}/bungo-rag:latest"
 RG="bungo-rag-rg"
 APP_NAME="bungo-app"
 ENV_NAME="bungo-env"
 
-echo "=== [1/4] ACR ログイン ==="
-az acr login --name bungoregistry
+echo "=== [1/4] ghcr.io ログイン ==="
+# gh CLI のトークンで docker ログイン。push には write:packages スコープが必要
+#   （不足時は once:  gh auth refresh -s write:packages,read:packages ）
+gh auth token | docker login ghcr.io -u s8tv9mvcz9-code --password-stdin
 
 echo "=== [2/4] Docker ビルド (linux/amd64) ==="
 docker buildx build --platform linux/amd64 -t "${IMAGE}" .
 
-echo "=== [3/4] ACR へプッシュ ==="
+echo "=== [3/4] ghcr.io へプッシュ ==="
 docker push "${IMAGE}"
 
 echo "=== [4/4] Container App 更新 ==="
-ACR_PASS=$(az acr credential show --name bungoregistry --query "passwords[0].value" -o tsv)
-
+# パッケージは public のため pull 認証情報は不要（--registry-* 不要）
 az containerapp update \
   --name "${APP_NAME}" \
   --resource-group "${RG}" \
