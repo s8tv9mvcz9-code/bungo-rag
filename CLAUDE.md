@@ -37,11 +37,11 @@ Diagnose the (optional) ZORAPI metadata source before indexing:
 python scripts/explore_zorapi.py
 ```
 
-Deploy (Docker → ACR → Azure Container Apps):
+Deploy (Docker → registry → Azure Container Apps):
 ```bash
-./deploy.sh        # builds linux/amd64, pushes to bungoregistry.azurecr.io, updates bungo-app
+./deploy.sh        # builds linux/amd64, pushes image, updates bungo-app
 ```
-Pushing to `main` with changes under `app/`, `requirements.txt`, or `Dockerfile` also triggers `.github/workflows/deploy.yml`, which does the same build/push/update keyed on the commit SHA.
+Pushing to `main` with changes under `app/`, `requirements.txt`, or `Dockerfile` triggers `.github/workflows/deploy.yml`, which builds & pushes to **ghcr.io/s8tv9mvcz9-code/bungo-rag** (public package — no pull credentials needed) and runs `az containerapp update` keyed on the commit SHA. The old ACR (`bungoregistry.azurecr.io`, Basic ~$5/mo) has been retired in favor of ghcr.io ($0).
 
 There is no test suite and no linter configured.
 
@@ -89,4 +89,4 @@ All config comes from `.env` (gitignored, loaded via `python-dotenv`; `deploy.sh
 - `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `EMBED_DEPLOYMENT` (default `text-embedding-3-small`) — embeddings
 - `CHAT_ENDPOINT`, `CHAT_API_KEY`, `CHAT_DEPLOYMENT` — chat; the endpoint string selects the provider/SDK (see Architecture). Currently set to the Foundry Claude endpoint (`.../anthropic`, `claude-opus-4-8`); `CHAT_API_KEY` is the `key1` of the `ty669999977444-3157-resource` Foundry account. The old GitHub Models / Phi config is kept commented in `.env` as a fallback.
 
-Azure resources are hardcoded in `deploy.sh`: registry `bungoregistry`, resource group `bungo-rag-rg`, app `bungo-app`, Container Apps env `bungo-env`.
+Azure resources: resource group `bungo-rag-rg`, app `bungo-app`, Container Apps env `bungo-env`. CI publishes images to `ghcr.io/s8tv9mvcz9-code/bungo-rag` (public). `deploy.sh` (local path) still references the retired ACR — migrate it to ghcr before use if ACR is deleted.
