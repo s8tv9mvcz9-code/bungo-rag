@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **👉 まず [`STATUS.md`](./STATUS.md) を読むこと。** ライブ環境・デプロイ経路・直近の変更・ハマりどころ（特に「`main` が並行セッションで分岐しやすい → push 前に `git fetch`」）の全体像がある。
+
 ## What this is
 
 **bungo-rag** — a RAG chatbot that converts modern Japanese into pre-war literary style (旧字旧仮名 / 文語体). It retrieves passages from Aozora Bunko (青空文庫) public-domain works as "style exemplars" and uses an LLM to rewrite/compose in that register. UI is a Streamlit chat app; the corpus lives in Azure AI Search.
