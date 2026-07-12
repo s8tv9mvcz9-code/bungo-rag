@@ -48,7 +48,7 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.caption("Embedding: Azure OpenAI  \nChat: GitHub Models Phi-4-mini")
+    st.caption("Embedding: Azure OpenAI  \nChat: Azure AI Foundry — Claude Opus 4.8")
     st.divider()
     st.info("💤 一定時間アクセスがない場合、次回初回アクセス時に起動まで1〜2分かかることがあります。")
 
