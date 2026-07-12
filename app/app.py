@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 from dotenv import load_dotenv
-from rag import search_chunks, stream_answer, format_context
+from rag import search_chunks, stream_answer, format_context, chat_backend_label
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
@@ -48,7 +48,7 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.caption("Embedding: Azure OpenAI  \nChat: GitHub Models Phi-4-mini")
+    st.caption(f"生成: {chat_backend_label()}")
     st.divider()
     st.info("💤 一定時間アクセスがない場合、次回初回アクセス時に起動まで1〜2分かかることがあります。")
 

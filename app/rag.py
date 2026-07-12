@@ -151,6 +151,17 @@ def _foundry_client():
     return _foundry_client_cached
 
 
+def chat_backend_label() -> str:
+    """UI 表示用: 現在有効なチャット生成バックエンドの人間可読ラベル。"""
+    if _chat_backend() == "foundry":
+        model = CHAT_DEPLOYMENT or "claude-opus-4-8"
+        auth = "Entra ID" if os.environ.get("FOUNDRY_AUTH", "").lower() == "entra" else "APIキー"
+        return f"Claude {model}（Azure AI Foundry・{auth}）"
+    endpoint = os.environ.get("CHAT_ENDPOINT", "")
+    provider = "Azure OpenAI" if "openai.azure.com" in endpoint else "OpenAI互換"
+    return f"{provider}: {CHAT_DEPLOYMENT or '(CHAT_DEPLOYMENT未設定)'}"
+
+
 def _stream_foundry(augmented_user: str, history: List[dict]) -> Iterator[str]:
     """Claude（Azure AI Foundry）で Messages API ストリーミング生成。
 
