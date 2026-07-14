@@ -1,0 +1,19 @@
+name: iOS CI
+on:
+  push: { paths: ["ios/**", ".github/workflows/ios-ci.yml"] }
+  pull_request: { paths: ["ios/**"] }
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - working-directory: ios
+        run: xcodegen generate
+      - working-directory: ios
+        run: >
+          xcodebuild build
+          -project BungoRag.xcodeproj -scheme BungoRag
+          -sdk iphonesimulator
+          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+          CODE_SIGNING_ALLOWED=NO
