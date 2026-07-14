@@ -143,7 +143,11 @@ ios/
 - `struct ChatRequest: Encodable { let message: String; let history: [ChatMessage]; let topK: Int }` — `CodingKeys` で `topK = "top_k"`。
 - `struct Source: Decodable, Identifiable { let id = UUID(); let title,author,style,text: String; CodingKeys で id を除外（title/author/style/text のみ） }` — **未知キー（book_id 等）は Codable が自動で無視**。
 - `enum StreamEvent { case token(String); case sources([Source]); case done; case error(String) }`
-- デコード補助 `private struct RawEvent: Decodable { let type: String; let content: String?; let sources: [Source]?; let message: String? }`。
+
+> **【P3実装時の訂正】** `RawEvent` は Swift の `private` がファイルスコープであるため、
+> `Models.swift` に置くと `Net/BungoAPI.swift` から参照できずコンパイルエラーになる。
+> `RawEvent` は **`BungoAPI.swift` 側に `private struct` として定義**する（NDJSONデコードの
+> 実装詳細であり、他ファイルから参照される想定もないため、利用箇所と同じファイルに閉じるのが正しい）。
 
 **`Net/BungoAPI.swift`**（§調査1 の URLSession.bytes.lines を採用）
 ```swift
