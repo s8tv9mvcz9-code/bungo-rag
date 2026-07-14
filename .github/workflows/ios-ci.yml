@@ -7,6 +7,16 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      # macos-14 ランナーの既定 Xcode は 15.4 だが、xcodegen が生成する
+      # プロジェクトフォーマットはより新しい Xcode を要求することがある
+      # （objectVersion 不一致で "future Xcode project file format" エラーになる）。
+      # ランナーに同梱された最新の Xcode を動的に選択し、この不一致を吸収する。
+      - name: Select latest available Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          echo "Selecting: $LATEST"
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
       - run: brew install xcodegen
       - working-directory: ios
         run: xcodegen generate

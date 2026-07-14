@@ -286,6 +286,7 @@ jobs:
 | Source 契約に `book_id` 追加 | クライアントは未知キー無視（Codable 既定・Ktor `ignoreUnknownKeys`） |
 | Foundry の temperature 非対応 | backend は rag.py 経由なので既に対応済み（クライアントは無関係） |
 | App Store 配布の署名 | 本ロードマップ外。CI は simulator ビルドのみ（署名不要）。配布時に別途証明書 |
+| **【実測・既知の落とし穴】`macos-14` 既定Xcode(15.4)がxcodegen生成プロジェクトを読めない** | `xcodegen` が生成する `.pbxproj` の `objectVersion` が Xcode 15.4 の対応範囲を超え「future Xcode project file format」で失敗（P2実装時に実際に発生）。`ios-ci.yml` に **ランナー上の最新 Xcode を動的選択する** ステップ（`ls /Applications/Xcode_*.app \| sort -V \| tail -1` → `xcode-select -s`）を追加して解消。特定バージョンをハードコードせずランナーイメージ更新に強くする。 |
 
 ---
 
