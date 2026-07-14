@@ -1,0 +1,29 @@
+name: Deploy Backend API
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "app/rag.py", "requirements.txt"]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }
+      - name: Build & push
+        run: |
+          IMG=ghcr.io/s8tv9mvcz9-code/bungo-rag-api
+          docker build -f backend/Dockerfile -t $IMG:${{ github.sha }} -t $IMG:latest .
+          docker push $IMG:${{ github.sha }}; docker push $IMG:latest
+      - uses: azure/login@v2
+        with: { creds: ${{ secrets.AZURE_CREDENTIALS }} }
+      - name: Deploy (update if exists)
+        run: |
+          az extension add --name containerapp --yes --only-show-errors
+          IMG=ghcr.io/s8tv9mvcz9-code/bungo-rag-api:${{ github.sha }}
+          if az containerapp show -n bungo-api -g bungo-rag-rg >/dev/null 2>&1; then
+            az containerapp update -n bungo-api -g bungo-rag-rg --image "$IMG"
+          else
+            echo "::warning::bungo-api 未作成。初回のみ backend/deploy-api.sh をローカル実行（シークレット注入のため）。"
+          fi
