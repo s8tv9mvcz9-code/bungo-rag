@@ -21,9 +21,13 @@ jobs:
       - working-directory: ios
         run: xcodegen generate
       - working-directory: ios
+        # ビルド確認が目的で実機/特定シミュレータでの実行はしないため、
+        # 'generic/platform=iOS Simulator' を使う。特定デバイス名+OS=latest だと
+        # ランナー上に該当バージョンのシミュレータが存在せず失敗することがある
+        # （例: iPhone 15 は OS 17.5 まで、OS=latest は 18.2 を指すため不一致）。
         run: >
           xcodebuild build
           -project BungoRag.xcodeproj -scheme BungoRag
           -sdk iphonesimulator
-          -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+          -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO

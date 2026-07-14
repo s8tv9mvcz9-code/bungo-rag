@@ -287,6 +287,7 @@ jobs:
 | Foundry の temperature 非対応 | backend は rag.py 経由なので既に対応済み（クライアントは無関係） |
 | App Store 配布の署名 | 本ロードマップ外。CI は simulator ビルドのみ（署名不要）。配布時に別途証明書 |
 | **【実測・既知の落とし穴】`macos-14` 既定Xcode(15.4)がxcodegen生成プロジェクトを読めない** | `xcodegen` が生成する `.pbxproj` の `objectVersion` が Xcode 15.4 の対応範囲を超え「future Xcode project file format」で失敗（P2実装時に実際に発生）。`ios-ci.yml` に **ランナー上の最新 Xcode を動的選択する** ステップ（`ls /Applications/Xcode_*.app \| sort -V \| tail -1` → `xcode-select -s`）を追加して解消。特定バージョンをハードコードせずランナーイメージ更新に強くする。 |
+| **【実測・既知の落とし穴】`-destination 'name=iPhone 15,OS=latest'` が失敗** | Xcode 16.2 選択後、`OS=latest`（＝18.2）に対し `iPhone 15` シミュレータは 17.5 までしか用意されておらず組み合わせが存在せず失敗（P2実装時に実際に発生）。**ビルド確認のみが目的**（実行はしない）なので、特定デバイス名を指定せず `-destination 'generic/platform=iOS Simulator'` を使う。ランナー上のシミュレータ構成に依存せず堅牢。 |
 
 ---
 
