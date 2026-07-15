@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose 側でテーマを定義するため、基底は Material3 の NoActionBar を使う -->
+    <style name="Theme.BungoRag" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

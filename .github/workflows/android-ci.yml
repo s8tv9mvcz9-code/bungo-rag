@@ -1,0 +1,25 @@
+name: Android CI
+on:
+  push: { paths: ["android/**", ".github/workflows/android-ci.yml"] }
+  pull_request: { paths: ["android/**"] }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Grant execute permission for gradlew
+        working-directory: android
+        run: chmod +x gradlew
+      # ビルド確認が目的。署名や実機接続は行わないため assembleDebug のみ。
+      # BASE_URL の既定は本番 bungo-api（build.gradle.kts のフォールバック）で、
+      # CI ではネットワークアクセスをしないので上書き不要。
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace

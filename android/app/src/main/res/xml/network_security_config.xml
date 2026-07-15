@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  既定の接続先は本番 bungo-api（HTTPS）で、これは通常の TLS 経路で扱われる。
+  下記は -PBUNGO_BASE_URL=http://10.0.2.2:8000 等でローカルバックエンドに
+  向けたときだけ効く例外で、開発用ホストへの平文(HTTP)接続を許可する。
+  本番ドメインはここに含めない（＝平文は不可、TLS 必須）ままにしておく。
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
