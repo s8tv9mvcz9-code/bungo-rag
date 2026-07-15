@@ -22,7 +22,8 @@ LLM が生成の主体、RAG は「文体参照」用（内容の転用は禁止
 ## 💰 コスト
 
 - **固定費: $0**（Search=free、Container Apps=scale-to-zero、レジストリ=ghcr.io public）
-- **変動費**: Opus トークンのみ（〜$0.02〜0.04/メッセージ）＋Embedding は無視できる額
+- **変動費**: チャットモデルのトークンのみ＋Embedding は無視できる額
+- **⚠️ コスト対策（2026-07）**: `claude-opus-4-8` は高額のため**デプロイ削除済**（`/chat` は生成時に一般化エラーを返す状態。安価モデルを `CHAT_ENDPOINT`/`CHAT_DEPLOYMENT` に再設定するまで復旧しない）。公開・無認証 API の濫用対策として backend に**入力クランプ＋階層レート制限（不特定多数=控えめ／関係者IP・キー=追加枠）＋エラー非開示**を実装（`backend/main.py`、詳細は CLAUDE.md「Abuse / cost guards」）。**真の $/時 上限は Foundry の TPM クォータ（Azure側で要設定）**。
 
 ## 🚀 CI/CD（すべて main push で自動、人間介入なし）
 
@@ -30,8 +31,10 @@ LLM が生成の主体、RAG は「文体参照」用（内容の転用は禁止
 |---|---|---|
 | `deploy.yml` | Web | `bungo-app` 更新 |
 | `deploy-backend.yml` | API | `bungo-api` 更新（未作成なら bungo-app から env 複製して**自動作成**）＋ `/health` 疎通ゲート |
-| `android-ci.yml` | Android | APK 検証 ＋ Releases **`android-latest`** に debug APK 添付（固定署名鍵 `android/ci-debug.keystore` で更新インストール可） |
-| `ios-ci.yml` | iOS | シミュレータ検証 ＋ Releases **`ios-latest`** に未署名 IPA 添付 |
+| `android-ci.yml` | Android | APK 検証 ＋ Releases **`android-latest`** に debug APK 添付（固定署名鍵 `android/ci-debug.keystore` で更新インストール可）。`build`(read)＋gated `publish`(write) の2ジョブ最小権限 |
+| `ios-ci.yml` | iOS | シミュレータ検証 ＋ Releases **`ios-latest`** に未署名 IPA 添付（`build`(read)＋gated `device-ipa`(write)） |
+| `eval-ci.yml` | 品質リンタ | `eval/` の決定的リンタ・検索ヘルパの純関数テスト（依存ゼロ・$0） |
+| `backend-ci.yml` | API 防御 | `backend/test_security.py`（入力クランプ／階層レート制限／エラー非開示）の回帰テスト |
 
 - 実機テスト手順: [`docs/device-testing.md`](./docs/device-testing.md)（Android=APK直インストール / iOS=自分のApple IDで署名）
 - ローカルからの手動デプロイ: `./deploy.sh`（Web）/ `bash backend/deploy-api.sh`（API、.env のシークレット注入つき初回作成に使う）
@@ -43,6 +46,8 @@ LLM が生成の主体、RAG は「文体参照」用（内容の転用は禁止
 3. **実機配布 CI/CD** — Android: APK を `android-latest` にローリング添付（固定 debug keystore で署名安定化）。iOS: 未署名 IPA を `ios-latest` に添付。
 4. **リポジトリ整理** — root README 新設、実機テストdocsを `docs/device-testing.md` に統合、`startup.sh`（未参照の遺物）削除、Dockerfile HEALTHCHECK 修正（curl→python）、deploy-api.sh のログイン欠落修正、古いPR #4/#5 クローズ。
 5. **生成品質ロードマップ策定** — [`docs/quality-roadmap.md`](./docs/quality-roadmap.md)（3視点独立立案→統合。リンタが要石）。
+6. **品質 Phase 0 + 決定的リンタ(1-1)** — `eval/linter.py`（旧字/歴史的仮名/文語の破れを機械判定、新旧字248字＋8ルール）。few-shot の自己矛盾（候文と和文体の混在・枕草子逐語引用）をリンタで検出し修正、`top_k` 優先充填/検索クエリ整形を共有純関数 `app/retrieval.py` に切出し。全て静的検証済（`eval/` テスト green）。
+7. **公開API の総合セキュリティ対策** — 入力クランプ／階層レート制限（不特定多数=控えめ枠・関係者IP/キー=追加枠、別々の日次バジェット）／エラー非開示／本文サイズ上限／セキュリティヘッダ（`backend/main.py`、`backend/test_security.py` で回帰テスト）。GH ワークフローを最小権限化（android を build/publish 分離）、秘密混入なしを監査。
 
 ## ⚠️ ハマりどころ・次セッションへの注意
 

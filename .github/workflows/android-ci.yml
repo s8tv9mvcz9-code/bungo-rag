@@ -6,11 +6,12 @@ on:
 concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
+# 既定は read（PR ビルドを最小権限に）。リリース添付する publish ジョブのみ write へ昇格。
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # ローリングリリース（android-latest）更新に必要
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -38,16 +39,27 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
 
-      # main への push では、常に同じ URL でダウンロードできる
-      # ローリングリリース android-latest に APK を添付する。
+  # main への push でのみ、build ジョブの APK を取得してローリングリリース
+  # android-latest に添付する。write 権限はこのジョブに限定（PR では走らない）。
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # ローリングリリース（android-latest）更新に必要
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bungo-rag-debug-apk
       # Android 実機: Releases から bungo-rag-debug.apk を DL → インストール。
       - name: Publish rolling release (android-latest)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp android/app/build/outputs/apk/debug/app-debug.apk bungo-rag-debug.apk
+          cp app-debug.apk bungo-rag-debug.apk
           gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create android-latest --repo "$GITHUB_REPOSITORY" \
               --prerelease --title "Android debug（ローリング）" \

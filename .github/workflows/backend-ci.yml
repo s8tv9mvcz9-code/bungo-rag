@@ -1,0 +1,34 @@
+name: Backend CI
+# 公開 API の濫用・コスト対策（入力クランプ／階層レート制限／エラー非開示）の回帰テスト。
+# 実モデル・秘密情報は不要（stream_answer をモックし、ダミー env でインポート）。
+on:
+  push:
+    paths:
+      - "backend/main.py"
+      - "backend/test_security.py"
+      - "backend/requirements.txt"
+      - "app/rag.py"
+      - "app/retrieval.py"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/main.py"
+      - "backend/test_security.py"
+      - "backend/requirements.txt"
+      - "app/rag.py"
+      - "app/retrieval.py"
+      - ".github/workflows/backend-ci.yml"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps (rag core + fastapi)
+        run: pip install -r requirements.txt -r backend/requirements.txt
+      - name: Backend security regression tests
+        run: python backend/test_security.py
