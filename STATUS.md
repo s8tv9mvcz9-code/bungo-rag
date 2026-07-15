@@ -56,10 +56,11 @@ LLM が生成の主体、RAG は「文体参照」用（内容の転用は禁止
 - **AZURE_CREDENTIALS**（Service Principal の client secret）には**有効期限**がある。失効すると deploy 系2本が同時に壊れる。恒久対策は OIDC 移行（未着手）。
 - **Android の未知イベント type** は例外を投げる（sealed 契約）。NDJSON に新イベントを足す前に前方互換化が必要（quality-roadmap 3-2）。
 
-## 🗂 ブランチの状態（2026-07-15 整理済み）
+## 🗂 ブランチの状態（2026-07-15 棚卸し）
 
 - **`main`** — 唯一の開発基点。全成果はここにある。
-- 削除済み（main に完全包含だったもの）: `claude/ios-app`, `claude/iphone-claude-code-setup-d2w3m`, `develop`
+- **削除候補（main に完全包含、独自コミット0 — 消しても何も失われない）**: `claude/ios-app`, `claude/iphone-claude-code-setup-d2w3m`, `develop`
+  削除する場合: `git push origin --delete claude/ios-app claude/iphone-claude-code-setup-d2w3m develop`
 - **アーカイブ（未マージの独自コミットあり・PRはクローズ済み）**:
   - `claude/foundry-claude` — ゼロコスト・ローカル検索＆マルチプロバイダ対応（PR #5）
   - `claude/android-native` — 旧Android試作（PR #4、現行版に置換済み）
