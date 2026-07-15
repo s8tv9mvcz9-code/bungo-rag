@@ -19,10 +19,10 @@ env/
 # macOS
 .DS_Store
 
-# データ・キャッシュ
+# データ・キャッシュ（ルート直下のみ。android/.../data/ パッケージ等を巻き込まないよう先頭 / 付き）
 *.zip
 *.csv
-data/
+/data/
 
 # IDE
 .vscode/

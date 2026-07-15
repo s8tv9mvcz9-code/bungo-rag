@@ -49,7 +49,9 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # BUILD_SHA はデプロイ CI（deploy-backend.yml）が注入する git SHA。
+    # 3クライアント共通の SSOT（app/rag.py）がどの版で動いているかの追跡用。
+    return {"status": "ok", "version": os.getenv("BUILD_SHA", "dev")}
 
 
 @app.post("/chat")

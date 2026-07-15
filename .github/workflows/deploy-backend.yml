@@ -1,29 +1,105 @@
 name: Deploy Backend API
+
+# 注意: このファイルは必ずブロックスタイル YAML で書くこと。
+# 旧版はフロースタイル（with: { password: ${{ ... }} }）で書かれており、
+# `${{ }}` の `}}` がフローマッピングを閉じてしまい workflow 全体が
+# パース不能 → 全ブランチ・全 push で startup failure になっていた。
 on:
   push:
     branches: [main]
-    paths: ["backend/**", "app/rag.py", "requirements.txt"]
+    paths:
+      # backend/** だと README 修正でも本番デプロイが走るため、実行物のみに絞る
+      - "backend/main.py"
+      - "backend/requirements.txt"
+      - "backend/Dockerfile"
+      - "app/rag.py"
+      - "requirements.txt"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch: # 手動再デプロイ・ロールバック用
+
+# デプロイの並走で古い SHA が後勝ちしないよう直列化（キャンセルはしない）
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions: { contents: read, packages: write }
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMG: ghcr.io/s8tv9mvcz9-code/bungo-rag-api
+      RG: bungo-rag-rg
+      APP: bungo-api
+
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }
-      - name: Build & push
+
+      - name: ghcr.io ログイン
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker ビルド & プッシュ
         run: |
-          IMG=ghcr.io/s8tv9mvcz9-code/bungo-rag-api
-          docker build -f backend/Dockerfile -t $IMG:${{ github.sha }} -t $IMG:latest .
-          docker push $IMG:${{ github.sha }}; docker push $IMG:latest
-      - uses: azure/login@v2
-        with: { creds: ${{ secrets.AZURE_CREDENTIALS }} }
-      - name: Deploy (update if exists)
+          docker buildx build --platform linux/amd64 \
+            -f backend/Dockerfile \
+            -t "$IMG:${{ github.sha }}" -t "$IMG:latest" \
+            --push .
+
+      - name: Azure ログイン
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Container App デプロイ（無ければ bungo-app から env を複製して自動作成）
         run: |
+          set -euo pipefail
           az extension add --name containerapp --yes --only-show-errors
-          IMG=ghcr.io/s8tv9mvcz9-code/bungo-rag-api:${{ github.sha }}
-          if az containerapp show -n bungo-api -g bungo-rag-rg >/dev/null 2>&1; then
-            az containerapp update -n bungo-api -g bungo-rag-rg --image "$IMG"
+          IMAGE="$IMG:${{ github.sha }}"
+
+          if az containerapp show -n "$APP" -g "$RG" >/dev/null 2>&1; then
+            echo "→ 既存 $APP を更新"
+            az containerapp update -n "$APP" -g "$RG" \
+              --image "$IMAGE" \
+              --set-env-vars "BUILD_SHA=${{ github.sha }}"
           else
-            echo "::warning::bungo-api 未作成。初回のみ backend/deploy-api.sh をローカル実行（シークレット注入のため）。"
+            echo "→ $APP 未作成。bungo-app の環境変数を複製して初回作成する"
+            # .env はローカルにしか無いため、稼働中の bungo-app（Web）に注入済みの
+            # 環境変数（Search/OpenAI/Chat のキー類）を読み出して流用する。
+            mapfile -t ENV_VARS < <(az containerapp show -n bungo-app -g "$RG" \
+              --query "properties.template.containers[0].env[?value!=null].join('=',[name,value])" -o tsv)
+            if [ "${#ENV_VARS[@]}" -eq 0 ]; then
+              echo "::error::bungo-app から環境変数を取得できませんでした"; exit 1
+            fi
+            ENV_VARS+=("BUILD_SHA=${{ github.sha }}")
+            az containerapp create -n "$APP" -g "$RG" \
+              --environment bungo-env \
+              --image "$IMAGE" \
+              --target-port 8000 \
+              --ingress external \
+              --min-replicas 0 --max-replicas 2 \
+              --env-vars "${ENV_VARS[@]}"
           fi
+
+      - name: /health 疎通ゲート（新リビジョンが応答するまで待つ）
+        run: |
+          set -euo pipefail
+          FQDN=$(az containerapp show -n "$APP" -g "$RG" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "URL: https://$FQDN"
+          # scale-to-zero のコールドスタートを考慮して最大 ~2 分ポーリング
+          for i in $(seq 1 12); do
+            BODY=$(curl -sf -m 20 "https://$FQDN/health" || true)
+            echo "try $i: ${BODY:-<no response>}"
+            if echo "$BODY" | grep -q '"status":"ok"' && echo "$BODY" | grep -q "${{ github.sha }}"; then
+              echo "✅ 新リビジョン（${{ github.sha }}）が応答"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::/health が新リビジョンで応答しません"
+          exit 1

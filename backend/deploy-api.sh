@@ -31,10 +31,16 @@ APP_NAME="bungo-api"
 PORT=8000
 
 echo "=== [1/4] ghcr.io ログイン ==="
-echo "→ 事前に 'docker login ghcr.io -u <GitHubユーザー名> -p <PAT(write:packages)>' を実行しておくこと"
+# gh CLI のトークンで docker ログイン（deploy.sh と同方式）。
+# push には write:packages スコープが必要（不足時: gh auth refresh -s write:packages,read:packages）
+gh auth token | docker login ghcr.io -u s8tv9mvcz9-code --password-stdin
 
 echo "=== [2/4] Docker ビルド (linux/amd64, backend/Dockerfile) ==="
-docker buildx build --platform linux/amd64 -f backend/Dockerfile -t "${IMAGE}" --push .
+# :latest のみだと az containerapp update がイメージ文字列同一で新リビジョンを
+# 引かないことがあるため、SHA タグも付けてそちらでデプロイする
+SHA_TAG="${IMAGE%:*}:$(git rev-parse --short HEAD)"
+docker buildx build --platform linux/amd64 -f backend/Dockerfile -t "${IMAGE}" -t "${SHA_TAG}" --push .
+IMAGE="${SHA_TAG}"
 
 echo "=== [3/4] Container App 作成 or 更新 ==="
 ENV_VARS=(

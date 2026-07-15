@@ -72,6 +72,14 @@ cd android
 - `done` … 完了
 - `error` … エラー（メッセージ表示）
 
+## CI 配布と署名
+
+- main への push で CI が debug APK をビルドし、GitHub Releases **`android-latest`** に添付する
+  （実機へのインストール手順は [`../docs/device-testing.md`](../docs/device-testing.md)）。
+- debug ビルドはコミット済みの **`ci-debug.keystore`** で署名される（CI・ローカル共通）。
+  ランナー毎に生成される鍵だと APK 更新のたびに署名不一致で再インストールが必要になるため固定している。
+  debug 証明書はストア公開に使えないため秘匿する価値は無い（release 署名鍵とは別物）。
+
 ## セキュリティ注意
 
 - API キー（Azure / GitHub Models）は **アプリに含めない**。すべてバックエンドが保持する。

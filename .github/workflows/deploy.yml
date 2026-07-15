@@ -7,6 +7,13 @@ on:
       - 'app/**'
       - 'requirements.txt'
       - 'Dockerfile'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch: # 手動再デプロイ用
+
+# デプロイの並走で古い SHA が後勝ちしないよう直列化（キャンセルはしない）
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -15,7 +22,6 @@ jobs:
       contents: read
       packages: write        # ghcr.io へ push するために必要
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       # イメージは GitHub Container Registry（ghcr.io）へ。ACR Basic($5/月)は廃止。
       # パッケージは public 運用のため、Container App 側は認証情報なしで pull できる。
       IMAGE: ghcr.io/s8tv9mvcz9-code/bungo-rag

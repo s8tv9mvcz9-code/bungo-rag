@@ -25,7 +25,23 @@ android {
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
     }
 
+    signingConfigs {
+        // CI・ローカルで共通の debug 署名。ランナー毎に生成される debug.keystore だと
+        // APK 更新時に署名不一致（INSTALL_FAILED_UPDATE_INCOMPATIBLE）で毎回
+        // アンインストールが必要になるため、debug 専用鍵をコミットして固定する。
+        // （debug 証明書はストア公開に使えないため秘匿価値は無い）
+        create("sharedDebug") {
+            storeFile = rootProject.file("ci-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("sharedDebug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(

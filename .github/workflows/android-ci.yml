@@ -1,10 +1,16 @@
 name: Android CI
 on:
   push: { paths: ["android/**", ".github/workflows/android-ci.yml"] }
-  pull_request: { paths: ["android/**"] }
+  pull_request: { paths: ["android/**", ".github/workflows/android-ci.yml"] }
+# 同一ブランチへの連続 push では古いビルドを打ち切る
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # ローリングリリース（android-latest）更新に必要
     steps:
       - uses: actions/checkout@v4
       - name: Set up JDK 17
@@ -23,3 +29,29 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # 実機テスト用: 全ビルドで APK をアーティファクト化（PR含む）
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bungo-rag-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      # main への push では、常に同じ URL でダウンロードできる
+      # ローリングリリース android-latest に APK を添付する。
+      # Android 実機: Releases から bungo-rag-debug.apk を DL → インストール。
+      - name: Publish rolling release (android-latest)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp android/app/build/outputs/apk/debug/app-debug.apk bungo-rag-debug.apk
+          gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create android-latest --repo "$GITHUB_REPOSITORY" \
+              --prerelease --title "Android debug（ローリング）" \
+              --notes "main の最新 debug APK。docs/device-testing.md 参照。"
+          gh release upload android-latest bungo-rag-debug.apk --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit android-latest --repo "$GITHUB_REPOSITORY" \
+            --notes "main の最新 debug APK（commit: ${GITHUB_SHA}）。インストール手順は docs/device-testing.md 参照。"

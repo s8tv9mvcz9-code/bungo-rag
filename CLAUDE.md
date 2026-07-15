@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**bungo-rag** — a RAG chatbot that converts modern Japanese into pre-war literary style (旧字旧仮名 / 文語体). It retrieves passages from Aozora Bunko (青空文庫) public-domain works as "style exemplars" and uses an LLM to rewrite/compose in that register. UI is a Streamlit chat app; the corpus lives in Azure AI Search.
+**bungo-rag** — a RAG chatbot that converts modern Japanese into pre-war literary style (旧字旧仮名 / 文語体). It retrieves passages from Aozora Bunko (青空文庫) public-domain works as "style exemplars" and uses an LLM to rewrite/compose in that register. The corpus lives in Azure AI Search.
+
+**This is a monorepo with three clients sharing one SSOT.** The RAG logic lives entirely in `app/rag.py`; the Streamlit web app imports it directly, `backend/main.py` (FastAPI) wraps it as an NDJSON streaming HTTP API, and the iOS (SwiftUI) / Android (Kotlin+Compose) native apps consume that API. Changing `app/rag.py` changes behavior on every platform.
 
 Note: the codebase, comments, and prompts are written in Japanese.
 
@@ -18,12 +20,19 @@ pip install -r requirements.txt   # openai, azure-search-documents, streamlit, e
 # Requires a .env file (gitignored) — see "Environment" below.
 ```
 
-Run the app locally:
+Run the apps locally:
 ```bash
-streamlit run app/app.py          # serves on :8501
+streamlit run app/app.py                 # Web UI on :8501
+uvicorn backend.main:app --reload        # Mobile API on :8000 (needs backend/requirements.txt too)
 ```
 
-Build / rebuild the search index (one-time / corpus refresh — downloads ~200 works from Aozora and embeds them):
+Build the mobile clients:
+```bash
+cd android && ./gradlew assembleDebug    # APK (JDK 17; wrapper jar committed)
+cd ios && xcodegen generate              # then open BungoRag.xcodeproj (macOS only)
+```
+
+Build / rebuild the search index (one-time / corpus refresh — downloads ~300 works (`MAX_BOOKS`) from Aozora and embeds them):
 ```bash
 python scripts/build_index.py
 ```
@@ -39,13 +48,20 @@ Diagnose the (optional) ZORAPI metadata source before indexing:
 python scripts/explore_zorapi.py
 ```
 
-Deploy (Docker → registry → Azure Container Apps):
-```bash
-./deploy.sh        # builds linux/amd64, pushes image, updates bungo-app
-```
-Pushing to `main` with changes under `app/`, `requirements.txt`, or `Dockerfile` triggers `.github/workflows/deploy.yml`, which builds & pushes to **ghcr.io/s8tv9mvcz9-code/bungo-rag** (public package — no pull credentials needed) and runs `az containerapp update` keyed on the commit SHA. The old ACR (`bungoregistry.azurecr.io`, Basic ~$5/mo) has been retired in favor of ghcr.io ($0).
+Deploy (Docker → ghcr.io → Azure Container Apps) — normally CI does this on push to `main`:
 
-There is no test suite and no linter configured.
+| Workflow | paths trigger | deploys |
+|---|---|---|
+| `deploy.yml` | `app/**`, `requirements.txt`, `Dockerfile`, itself | Web → `bungo-app` |
+| `deploy-backend.yml` | `backend/{main.py,requirements.txt,Dockerfile}`, `app/rag.py`, `requirements.txt`, itself | API → `bungo-api` (auto-creates it by cloning env vars from `bungo-app` if missing; gates on `/health` returning the new SHA) |
+| `android-ci.yml` | `android/**`, itself | builds debug APK; on `main` attaches it to rolling release **`android-latest`** |
+| `ios-ci.yml` | `ios/**`, itself | simulator build check; on `main` attaches an unsigned IPA to rolling release **`ios-latest`** |
+
+Local fallbacks: `./deploy.sh` (Web; also the only path that injects `.env` vars into the Container App) and `bash backend/deploy-api.sh` (API; used for first-time creation with secret injection). Both push to ghcr.io — the old ACR is retired and deleted.
+
+**⚠️ Workflow YAML must be written in block style.** Flow-style mappings containing `${{ }}` (e.g. `with: { creds: ${{ secrets.X }} }`) are unparseable — the `}}` closes the flow mapping — and produce startup failures on *every* push of *every* branch. This actually happened to `deploy-backend.yml` (10 consecutive silent failures).
+
+There is no test suite for the Python code. Mobile CI verifies that iOS/Android compile. A quality-evaluation harness is planned — see `docs/quality-roadmap.md`.
 
 ## Architecture
 
@@ -75,9 +91,12 @@ Request flow (`app/rag.py` → `stream_answer`):
 
 - `app/app.py` — Streamlit UI: chat loop, session state (`messages`, `sources`), sidebar (top-K slider, reset), streaming render with a `▌` cursor, source expander.
 - `app/rag.py` — RAG core: clients, `SYSTEM_PROMPT`, `search_chunks`, `format_context`, `stream_answer`. This is the file to edit for retrieval or generation behavior.
-- `scripts/build_index.py` — index builder. Creates the vector index if absent, downloads the Aozora catalog ZIP, filters to `旧字旧仮名`/`旧字新仮名` + copyright-free works, cleans Aozora markup (ruby `《》`, annotations `［＃］`), chunks by paragraph (~300 chars, splitting on 。！？ when oversized), embeds in batches of 16, uploads in batches of 1000. Tunables (`MAX_BOOKS`, `CHUNK_SIZE`, `TARGET_STYLES`, etc.) are constants near the top. **Author metadata:** the extended catalog has no `姓名` column — author is built from the separate `姓` + `名` columns via `_author_name()`. (An earlier bug read a non-existent `姓名` key, so every doc got `author="不明"`; existing indexed docs still carry `"不明"` until the index is rebuilt.)
+- `backend/main.py` — FastAPI wrapper around `app/rag.py` for the native apps. `POST /chat` streams NDJSON events (`token` / `sources` / `done` / `error`); `GET /health` returns `{"status":"ok","version":"<BUILD_SHA>"}` where `BUILD_SHA` is injected by the deploy workflow (SSOT traceability). The event/field contract is mirrored in `ios/Sources/Model/Models.swift` and `android/.../data/Models.kt` — all three are verified consistent (extra keys like `book_id` are safely ignored by both clients; Android sets `ignoreUnknownKeys`, but **unknown event `type`s still throw** there — make clients forward-compatible before adding new event types).
+- `ios/` — SwiftUI app. No `.xcodeproj` is committed; run `xcodegen generate` from `ios/project.yml`. Base URL comes from Info.plist injection (`project.yml`) with a hardcoded production fallback in `Config.swift`.
+- `android/` — Kotlin + Jetpack Compose app (Gradle version catalog, wrapper jar committed). Base URL default is production, overridable via `-PBUNGO_BASE_URL=...`. Debug builds are signed with the committed `android/ci-debug.keystore` so CI-built APKs can update-install over each other (a per-runner keystore would cause `INSTALL_FAILED_UPDATE_INCOMPATIBLE`).
+- `scripts/build_index.py` — index builder. Creates the vector index if absent, downloads the Aozora catalog ZIP, filters to `旧字旧仮名`/`旧字新仮名` + copyright-free works, cleans Aozora markup (ruby `《》`, annotations `［＃］`), chunks by paragraph (~300 chars, splitting on 。！？ when oversized), embeds in batches of 16, uploads in batches of 1000. Tunables (`MAX_BOOKS`=300, `CHUNK_SIZE`, `TARGET_STYLES`, etc.) are constants near the top. **Author metadata:** the extended catalog has no `姓名` column — author is built from the separate `姓` + `名` columns via `_author_name()` (an earlier bug wrote `author="不明"` everywhere; fixed and the index has been rebuilt — see STATUS.md).
 - `scripts/query.py` — standalone CLI mirror of the RAG pipeline (non-streaming), for debugging retrieval/generation without the UI.
-- `Dockerfile` / `startup.sh` — two run modes. Dockerfile runs Streamlit on `:8501` (used by Container Apps). `startup.sh` is for Azure App Service (Linux), binding to `$PORT` (default 8000).
+- `Dockerfile` — Streamlit web image on `:8501` (used by `bungo-app`). `backend/Dockerfile` — FastAPI image on `:8000` (used by `bungo-api`; copies `app/` in so `rag.py` is importable).
 
 ### Search index schema (`bungo-chunks`)
 
@@ -91,4 +110,4 @@ All config comes from `.env` (gitignored, loaded via `python-dotenv`; `deploy.sh
 - `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `EMBED_DEPLOYMENT` (default `text-embedding-3-small`) — embeddings
 - `CHAT_ENDPOINT`, `CHAT_API_KEY`, `CHAT_DEPLOYMENT` — chat; the endpoint string selects the provider/SDK (see Architecture). Currently set to the Foundry Claude endpoint (`.../anthropic`, `claude-opus-4-8`); `CHAT_API_KEY` is the `key1` of the `ty669999977444-3157-resource` Foundry account. The old GitHub Models / Phi config is kept commented in `.env` as a fallback.
 
-Azure resources: resource group `bungo-rag-rg`, app `bungo-app`, Container Apps env `bungo-env`. CI publishes images to `ghcr.io/s8tv9mvcz9-code/bungo-rag` (public). `deploy.sh` (local path) still references the retired ACR — migrate it to ghcr before use if ACR is deleted.
+Azure resources: resource group `bungo-rag-rg`, apps `bungo-app` (Web) / `bungo-api` (API), Container Apps env `bungo-env`. CI publishes images to `ghcr.io/s8tv9mvcz9-code/bungo-rag` and `.../bungo-rag-api` (both public). `deploy.sh` and `backend/deploy-api.sh` are already migrated to ghcr (pushing needs `gh auth refresh -s write:packages` once). The mobile apps bake the production `bungo-api` URL at build time — if the FQDN ever changes, update `android/gradle.properties`, `android/app/build.gradle.kts`, `ios/project.yml`, `ios/Sources/Config.swift` together.

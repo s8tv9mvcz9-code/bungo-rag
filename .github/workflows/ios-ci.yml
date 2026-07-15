@@ -1,7 +1,13 @@
 name: iOS CI
 on:
   push: { paths: ["ios/**", ".github/workflows/ios-ci.yml"] }
-  pull_request: { paths: ["ios/**"] }
+  pull_request: { paths: ["ios/**", ".github/workflows/ios-ci.yml"] }
+# 同一ブランチへの連続 push では古いビルドを打ち切る
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read # device-ipa ジョブのみ write（リリース添付）に昇格
 jobs:
   build:
     runs-on: macos-14
@@ -31,3 +37,60 @@ jobs:
           -sdk iphonesimulator
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
+
+  # 実機テスト用: 未署名 IPA を生成してローリングリリース ios-latest に添付。
+  # 未署名なのでそのままではインストール不可 — 手元の Mac の Xcode か
+  # Sideloadly 等で自分の Apple ID（無料枠可）で署名してインストールする。
+  # 手順は docs/device-testing.md 参照。
+  device-ipa:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    permissions:
+      contents: write # ローリングリリース（ios-latest）更新に必要
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select latest available Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
+      - run: brew install xcodegen
+      - working-directory: ios
+        run: xcodegen generate
+      - name: Build unsigned .app (iphoneos)
+        working-directory: ios
+        run: >
+          xcodebuild build
+          -project BungoRag.xcodeproj -scheme BungoRag
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -configuration Release
+          -derivedDataPath build
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Package unsigned IPA
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          APP=$(ls -d build/Build/Products/Release-iphoneos/*.app | head -1)
+          echo "app: $APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry BungoRag-unsigned.ipa Payload
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bungo-rag-unsigned-ipa
+          path: ios/BungoRag-unsigned.ipa
+          retention-days: 14
+      - name: Publish rolling release (ios-latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view ios-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create ios-latest --repo "$GITHUB_REPOSITORY" \
+              --prerelease --title "iOS unsigned IPA（ローリング）" \
+              --notes "main の最新未署名 IPA。docs/device-testing.md 参照。"
+          gh release upload ios-latest ios/BungoRag-unsigned.ipa --clobber --repo "$GITHUB_REPOSITORY"
+          gh release edit ios-latest --repo "$GITHUB_REPOSITORY" \
+            --notes "main の最新未署名 IPA（commit: ${GITHUB_SHA}）。自分の Apple ID で署名してインストール — 手順は docs/device-testing.md 参照。"

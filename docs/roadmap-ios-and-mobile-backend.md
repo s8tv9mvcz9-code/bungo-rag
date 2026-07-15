@@ -254,14 +254,14 @@ jobs:
 | # | フェーズ | 成果物 | 検証（受け入れ） | 実行環境 | 状態 |
 |---|---|---|---|---|---|
 | P0 | 起点 | `claude/ios-app`（main 基軸） | `git merge-base --is-ancestor origin/main HEAD` | コンテナ | ✅完了 |
-| P1 | backend 統合＋ghcr化 | `backend/` を main へ、`deploy-backend.yml`(ghcr)、`deploy-api.sh`(ghcr) | §2.3、`grep -r azurecr` 空、`import backend.main` 成功 | コンテナ（コード）＋Azure(デプロイは人/CI) | ✅コード完了／Azure実デプロイは未実施 |
+| P1 | backend 統合＋ghcr化 | `backend/` を main へ、`deploy-backend.yml`(ghcr)、`deploy-api.sh`(ghcr) | §2.3、`grep -r azurecr` 空、`import backend.main` 成功 | コンテナ（コード）＋Azure(デプロイは人/CI) | ✅完了（deploy-backend.yml の YAML 構文バグ修正後、CD で自動デプロイ — STATUS.md 参照） |
 | P2 | iOS scaffold | `ios/project.yml`・`ios/.gitignore`・`ios/Sources/`(空App)・`ios-ci.yml` | CI で `xcodegen generate`＋空アプリビルド緑 | コンテナ(執筆)＋macOS CI(検証) | ✅完了（CI緑, run #3） |
 | P3 | iOS ネットワーク層 | `Models.swift`・`BungoAPI.swift` | ビルド緑、`RawEvent` デコード単体（可能なら XCTest） | 同上 | ✅完了（CI緑, run #4） |
 | P4 | iOS UI | `ChatViewModel.swift`・`ChatView.swift`・`Config.swift`・`BungoRagApp.swift` | ビルド緑、シミュレータ起動（UIテスト任意） | 同上 | ✅完了（CI緑, run #5） |
-| P5 | 結線・E2E | `Config` の BASE_URL＝本番`bungo-api`、Android の `BUNGO_BASE_URL` も更新 | 実機/シミュレータで §3.5 の逐次表示、Android も疎通 | 端末/Mac（本番接続） | 📋手順書完成（`docs/real-device-testing.md`）／実行はユーザー側（Mac必須） |
+| P5 | 結線・E2E | `Config` の BASE_URL＝本番`bungo-api`、Android の `BUNGO_BASE_URL` も更新 | 実機/シミュレータで §3.5 の逐次表示、Android も疎通 | 端末/Mac（本番接続） | 📋手順書完成（`docs/device-testing.md` に統合）／インストールのみユーザー側 |
 
 **依存**：P1 は P2〜 と独立（並行可）。iOS の E2E（P5）は P1（backend デプロイ）完了が前提。
-**P5の実行手順**は `docs/real-device-testing.md` を参照。①backend疎通確認 → ②Macでclone → ③`xcodegen generate` → ④無料Apple IDで署名 → ⑤実機信頼 → ⑥ビルド実行 → ⑦動作確認、の7ステップ。
+**P5の実行手順**は `docs/device-testing.md`（iOS/Android統合版）を参照。①backend疎通確認 → ②Macでclone → ③`xcodegen generate` → ④無料Apple IDで署名 → ⑤実機信頼 → ⑥ビルド実行 → ⑦動作確認、の7ステップ。
 
 ---
 
