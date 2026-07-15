@@ -20,6 +20,7 @@ query.py
 """
 
 import os
+import sys
 import argparse
 from typing import List
 from dotenv import load_dotenv
@@ -28,6 +29,11 @@ from anthropic import Anthropic
 from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from azure.core.credentials import AzureKeyCredential
+
+# 検索クエリ整形・手本の多様化は app/retrieval.py の共有純関数を使う
+# （rag.py と同一ロジック。ロードマップ3-1の一本化の一歩）
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
+from retrieval import search_query, diversify  # noqa: E402
 
 load_dotenv()
 
@@ -112,20 +118,8 @@ def search(query: str, top: int = 5) -> List[dict]:
         select=["id", "text", "title", "author", "style", "chunk_idx", "book_id"],
         top=candidate_top,
     )
-
-    # 1作品 MAX_PER_BOOK 件までに間引く
-    picked: List[dict] = []
-    per_book: dict = {}
-    for r in results:
-        d = dict(r)
-        key = d.get("book_id") or d.get("title")
-        if per_book.get(key, 0) >= MAX_PER_BOOK:
-            continue
-        per_book[key] = per_book.get(key, 0) + 1
-        picked.append(d)
-        if len(picked) >= top:
-            break
-    return picked
+    # 旧字旧仮名を優先しつつ 1作品 MAX_PER_BOOK 件までに間引く（rag.py と共有）
+    return diversify([dict(r) for r in results], top=top, max_per_book=MAX_PER_BOOK)
 
 
 # ── 生成 ────────────────────────────────────────────────
@@ -185,8 +179,8 @@ def main():
 
     print(f"\n🔍 クエリ: 「{args.query}」\n")
 
-    # 検索
-    results = search(args.query, top=args.top)
+    # 検索（変換指示語を除いた内容で引く）
+    results = search(search_query(args.query), top=args.top)
     if not results:
         print("検索結果が見つかりませんでした。")
         return
