@@ -47,6 +47,7 @@ LLM が生成の主体、RAG は「文体参照」用（内容の転用は禁止
 ## ⚠️ ハマりどころ・次セッションへの注意
 
 - **⚠️ workflow YAML はブロックスタイルで書く** — `with: { creds: ${{ secrets.X }} }` のようなフロースタイルは `}}` がマッピングを閉じて**パース不能**になり、全 push が startup failure になる（実際に起きた）。
+- **⚠️ 新規 ghcr パッケージは既定 private** — Azure Container Apps は匿名 pull（public 前提）でイメージを引くため、新パッケージを作ったら **Profile → Packages → 該当 → Change visibility → Public** が必須（忘れると `UNAUTHORIZED: authentication required` でデプロイ失敗。`bungo-rag-api` で実際に発生し public 化で解決）。deploy-backend.yml に public 事前確認ステップあり。
 - **⚠️ 並行セッションで `main` が分岐しやすい** — push 前に必ず `git fetch origin` して origin/main との差分を確認。
 - **`.env` は本番シークレット** — gitignore 維持・絶対にコミットしない。bungo-api の env は bungo-app から複製済み（キー更新時は両方に反映）。
 - **Foundry の Claude 制約**: `temperature` は 400 で拒否（送らない）／ `system` はトップレベル引数／ Prompt Caching は β（`anthropic-beta` ヘッダ必須）。
