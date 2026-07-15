@@ -1,6 +1,8 @@
 package com.bungo.rag.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -275,12 +277,10 @@ private fun InputBar(enabled: Boolean, onSend: (String) -> Unit) {
 /** リップル無しのタップ修飾子（ヘッダ展開用の簡易実装） */
 @Composable
 private fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier {
-    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    return this.then(
-        androidx.compose.foundation.clickable(
-            interactionSource = interaction,
-            indication = null,
-            onClick = onClick,
-        )
+    val interaction = remember { MutableInteractionSource() }
+    return this.clickable(
+        interactionSource = interaction,
+        indication = null,
+        onClick = onClick,
     )
 }
