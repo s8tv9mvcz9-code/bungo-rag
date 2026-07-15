@@ -50,32 +50,53 @@ jobs:
             -t "$IMG:${{ github.sha }}" -t "$IMG:latest" \
             --push .
 
+      # Azure Container Apps は匿名 pull（＝public パッケージ前提）でイメージを引く。
+      # 新規 ghcr パッケージは既定 private なので、public 化を忘れると
+      # 「UNAUTHORIZED: authentication required」という分かりにくい失敗になる。
+      # ここで匿名 pull 可否を先に検査し、未公開なら明快なガイドで即停止する。
+      - name: ghcr パッケージが public か事前確認
+        run: |
+          set -euo pipefail
+          PKG="s8tv9mvcz9-code/bungo-rag-api"
+          TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:${PKG}:pull&service=ghcr.io" | python3 -c "import sys,json;print(json.load(sys.stdin).get('token',''))")
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" \
+            -H "Accept: application/vnd.oci.image.index.v1+json" \
+            "https://ghcr.io/v2/${PKG}/manifests/${{ github.sha }}")
+          if [ "$CODE" != "200" ]; then
+            echo "::error::ghcr パッケージ ${PKG} を匿名 pull できません (HTTP $CODE)。"
+            echo "::error::GitHub の Profile → Packages → bungo-rag-api → Package settings → Change visibility → Public にしてから再実行してください（Web 用 bungo-rag と同じ public 運用）。"
+            exit 1
+          fi
+          echo "✅ ${PKG} は public。Azure が匿名 pull 可能。"
+
       - name: Azure ログイン
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Container App デプロイ（無ければ bungo-app から env を複製して自動作成）
+      - name: Container App デプロイ（bungo-app から env を複製・冪等/自己修復）
         run: |
           set -euo pipefail
           az extension add --name containerapp --yes --only-show-errors
           IMAGE="$IMG:${{ github.sha }}"
 
+          # RAG 実行に必要な環境変数（Search/OpenAI/Chat のキー類）は .env にしか
+          # 無いため、稼働中の bungo-app（Web）に注入済みの値を複製する。
+          # create/update どちらの経路でも必ず全キーを設定する（＝前回 create が
+          # イメージ pull 失敗で中途終了していても、再実行で完全な状態に収束する）。
+          mapfile -t ENV_VARS < <(az containerapp show -n bungo-app -g "$RG" \
+            --query "properties.template.containers[0].env[?value!=null].join('=',[name,value])" -o tsv)
+          if [ "${#ENV_VARS[@]}" -eq 0 ]; then
+            echo "::error::bungo-app から環境変数を複製できませんでした"; exit 1
+          fi
+          ENV_VARS+=("BUILD_SHA=${{ github.sha }}")
+
           if az containerapp show -n "$APP" -g "$RG" >/dev/null 2>&1; then
-            echo "→ 既存 $APP を更新"
+            echo "→ 既存 $APP を更新（イメージ＋全env）"
             az containerapp update -n "$APP" -g "$RG" \
-              --image "$IMAGE" \
-              --set-env-vars "BUILD_SHA=${{ github.sha }}"
+              --image "$IMAGE" --set-env-vars "${ENV_VARS[@]}"
           else
-            echo "→ $APP 未作成。bungo-app の環境変数を複製して初回作成する"
-            # .env はローカルにしか無いため、稼働中の bungo-app（Web）に注入済みの
-            # 環境変数（Search/OpenAI/Chat のキー類）を読み出して流用する。
-            mapfile -t ENV_VARS < <(az containerapp show -n bungo-app -g "$RG" \
-              --query "properties.template.containers[0].env[?value!=null].join('=',[name,value])" -o tsv)
-            if [ "${#ENV_VARS[@]}" -eq 0 ]; then
-              echo "::error::bungo-app から環境変数を取得できませんでした"; exit 1
-            fi
-            ENV_VARS+=("BUILD_SHA=${{ github.sha }}")
+            echo "→ $APP を新規作成"
             az containerapp create -n "$APP" -g "$RG" \
               --environment bungo-env \
               --image "$IMAGE" \
