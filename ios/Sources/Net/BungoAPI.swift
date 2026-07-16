@@ -14,10 +14,12 @@ private struct RawEvent: Decodable {
 /// コールバックへ渡す（API契約 §2.1）。
 final class BungoAPI {
     private let base: URL
+    private let apiKey: String?
     private let session: URLSession
 
-    init(baseURL: URL) {
+    init(baseURL: URL, apiKey: String? = nil) {
         self.base = baseURL
+        self.apiKey = apiKey
         let c = URLSessionConfiguration.default
         c.timeoutIntervalForRequest = 200   // scale-to-zero コールドスタート(最大1〜2分)対応
         c.timeoutIntervalForResource = 600
@@ -31,6 +33,8 @@ final class BungoAPI {
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.setValue("application/x-ndjson", forHTTPHeaderField: "Accept")
+        // 関係者キーが設定されていれば送る（nil なら公開枠のまま）
+        if let apiKey { r.setValue(apiKey, forHTTPHeaderField: "X-API-Key") }
         r.httpBody = try JSONEncoder().encode(req)
 
         let (bytes, resp) = try await session.bytes(for: r)

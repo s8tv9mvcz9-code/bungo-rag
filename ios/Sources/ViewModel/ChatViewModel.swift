@@ -9,7 +9,7 @@ final class ChatViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorText: String? = nil
 
-    private let api = BungoAPI(baseURL: Config.baseURL)
+    private let api = BungoAPI(baseURL: Config.baseURL, apiKey: Config.apiKey)
 
     func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

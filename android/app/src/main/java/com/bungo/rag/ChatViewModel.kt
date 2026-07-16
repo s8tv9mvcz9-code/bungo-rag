@@ -25,7 +25,7 @@ data class ChatUiState(
 
 class ChatViewModel : ViewModel() {
 
-    private val api = BungoApi(BuildConfig.BASE_URL)
+    private val api = BungoApi(BuildConfig.BASE_URL, BuildConfig.API_KEY)
 
     private val _ui = MutableStateFlow(ChatUiState())
     val ui: StateFlow<ChatUiState> = _ui.asStateFlow()

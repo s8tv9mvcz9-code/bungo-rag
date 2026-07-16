@@ -15,3 +15,6 @@ targets:
         CFBundleDisplayName: 文語作文支援
         UILaunchScreen: {}
         BUNGO_BASE_URL: https://bungo-api.gentleground-ba3d7ba2.japaneast.azurecontainerapps.io
+        # 関係者用の任意 API キー（既定は空＝公開レート枠）。関係者向けビルドでのみ値を入れる。
+        # ⚠ 値をコミットしないこと（公開リポジトリ）。
+        BUNGO_API_KEY: ""

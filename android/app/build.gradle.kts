@@ -23,6 +23,12 @@ android {
         val baseUrl = (project.findProperty("BUNGO_BASE_URL") as String?)
             ?: "https://bungo-api.gentleground-ba3d7ba2.japaneast.azurecontainerapps.io"
         buildConfigField("String", "BASE_URL", "\"$baseUrl\"")
+
+        // 関係者用の任意 API キー。空（既定）なら公開枠。関係者向けビルドでのみ
+        // -PBUNGO_API_KEY=<共有シークレット> を渡すと X-API-Key を送り、バックエンドの
+        // 追加枠（trusted）で通る。公開配布（android-latest）は空のまま。値はコミットしない。
+        val apiKey = (project.findProperty("BUNGO_API_KEY") as String?) ?: ""
+        buildConfigField("String", "API_KEY", "\"$apiKey\"")
     }
 
     signingConfigs {

@@ -8,4 +8,11 @@ enum Config {
         let value = (Bundle.main.object(forInfoDictionaryKey: "BUNGO_BASE_URL") as? String) ?? fallback
         return URL(string: value) ?? URL(string: fallback)!
     }
+
+    /// Info.plist の BUNGO_API_KEY（関係者用の任意キー）。空/未設定なら nil = 公開枠。
+    /// 関係者向けビルドでのみ project.yml に値を入れて再生成する（公開配布は空）。
+    static var apiKey: String? {
+        let value = Bundle.main.object(forInfoDictionaryKey: "BUNGO_API_KEY") as? String
+        return (value?.isEmpty == false) ? value : nil
+    }
 }

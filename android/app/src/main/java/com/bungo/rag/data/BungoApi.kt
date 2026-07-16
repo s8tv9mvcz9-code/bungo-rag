@@ -19,7 +19,7 @@ import kotlinx.serialization.json.Json
  * /chat の NDJSON ストリームを 1 行ずつ [StreamEvent] にデコードして
  * コールバックへ渡す。
  */
-class BungoApi(private val baseUrl: String) {
+class BungoApi(private val baseUrl: String, private val apiKey: String = "") {
 
     private val json = Json {
         ignoreUnknownKeys = true   // @search.score など未知キーを無視
@@ -50,7 +50,11 @@ class BungoApi(private val baseUrl: String) {
     ) {
         client.preparePost("$baseUrl/chat") {
             contentType(ContentType.Application.Json)
-            headers { append("Accept", "application/x-ndjson") }
+            headers {
+                append("Accept", "application/x-ndjson")
+                // 関係者キーが設定されていれば送る（空なら公開枠のまま）
+                if (apiKey.isNotBlank()) append("X-API-Key", apiKey)
+            }
             setBody(request)
         }.execute { response ->
             val channel = response.bodyAsChannel()
