@@ -60,10 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           cp app-debug.apk bungo-rag-debug.apk
+          # view が一時エラーでも create の「既存タグ 422」で落ちないよう三段構え
+          # （GitHub API 障害時に view 失敗→create 422 で publish が落ちた実績あり）
           gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create android-latest --repo "$GITHUB_REPOSITORY" \
               --prerelease --title "Android debug（ローリング）" \
-              --notes "main の最新 debug APK。docs/device-testing.md 参照。"
+              --notes "main の最新 debug APK。docs/device-testing.md 参照。" || \
+            gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null
           gh release upload android-latest bungo-rag-debug.apk --clobber --repo "$GITHUB_REPOSITORY"
           gh release edit android-latest --repo "$GITHUB_REPOSITORY" \
             --notes "main の最新 debug APK（commit: ${GITHUB_SHA}）。インストール手順は docs/device-testing.md 参照。"

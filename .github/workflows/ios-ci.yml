@@ -87,10 +87,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # view が一時エラーでも create の「既存タグ 422」で落ちないよう三段構え
+          # （GitHub API 障害時に view 失敗→create 422 で publish が落ちた実績あり）
           gh release view ios-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create ios-latest --repo "$GITHUB_REPOSITORY" \
               --prerelease --title "iOS unsigned IPA（ローリング）" \
-              --notes "main の最新未署名 IPA。docs/device-testing.md 参照。"
+              --notes "main の最新未署名 IPA。docs/device-testing.md 参照。" || \
+            gh release view ios-latest --repo "$GITHUB_REPOSITORY" >/dev/null
           gh release upload ios-latest ios/BungoRag-unsigned.ipa --clobber --repo "$GITHUB_REPOSITORY"
           gh release edit ios-latest --repo "$GITHUB_REPOSITORY" \
             --notes "main の最新未署名 IPA（commit: ${GITHUB_SHA}）。自分の Apple ID で署名してインストール — 手順は docs/device-testing.md 参照。"
