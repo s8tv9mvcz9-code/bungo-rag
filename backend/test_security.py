@@ -47,7 +47,7 @@ _seq = itertools.count(1)
 
 
 def _ok(**_k):
-    return (iter(["変", "換"]), [{"title": "x"}])
+    return (iter(["変", "換"]), [{"title": "x"}], None)
 
 
 m.stream_answer = _ok

@@ -35,12 +35,24 @@ struct ChatView: View {
                         )
                     }
 
+                    if let palette = viewModel.palette {
+                        PaletteBar(palette: palette)
+                            .listRowSeparator(.hidden)
+                    }
+
                     if !viewModel.sources.isEmpty {
                         DisclosureGroup("📚 参照した青空文庫テキスト（\(viewModel.sources.count) 件）") {
                             ForEach(viewModel.sources) { source in
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(source.title) / \(source.author)（\(source.style)）")
-                                        .font(.subheadline).bold()
+                                    HStack(spacing: 6) {
+                                        // 共感覚: 手本の色点（旧サーバでは color=nil → 表示なし）
+                                        if let hex = source.color, let dot = Color(bungoHex: hex) {
+                                            Circle().fill(dot).frame(width: 10, height: 10)
+                                        }
+                                        Text("\(source.title) / \(source.author)（\(source.style)）"
+                                             + (source.colorName.map { "〔\($0)〕" } ?? ""))
+                                            .font(.subheadline).bold()
+                                    }
                                     Text(source.text)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -85,6 +97,41 @@ struct ChatView: View {
         let text = inputText
         inputText = ""
         viewModel.send(text)
+    }
+}
+
+/// 共感覚の色帯: 入力色 → 連想色 → 手本色 のグラデーションと伝統色名
+private struct PaletteBar: View {
+    let palette: Palette
+
+    var body: some View {
+        let colors = palette.stops.compactMap { Color(bungoHex: $0) }
+        VStack(alignment: .leading, spacing: 4) {
+            if colors.count >= 2 {
+                LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
+                    .frame(height: 8)
+                    .clipShape(Capsule())
+            }
+            Text("情調 「\(palette.blend?.name ?? "")」"
+                 + ((palette.categories?.isEmpty == false)
+                    ? "　—　\(palette.categories!.joined(separator: "・"))の氣配" : ""))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// "#RRGGBB" → SwiftUI Color（不正値は nil）
+private extension Color {
+    init?(bungoHex hex: String) {
+        var value = hex
+        if value.hasPrefix("#") { value.removeFirst() }
+        guard value.count == 6, let rgb = UInt64(value, radix: 16) else { return nil }
+        self.init(
+            red: Double((rgb >> 16) & 0xFF) / 255.0,
+            green: Double((rgb >> 8) & 0xFF) / 255.0,
+            blue: Double(rgb & 0xFF) / 255.0
+        )
     }
 }
 

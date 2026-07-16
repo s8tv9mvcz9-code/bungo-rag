@@ -11,6 +11,8 @@ from azure.search.documents.models import VectorizedQuery
 from azure.core.credentials import AzureKeyCredential
 # 検索クエリ整形・手本の多様化（rag.py と scripts/query.py の共有純関数）
 from retrieval import search_query, diversify
+# 共感覚レイヤー: 文 → 情調 → 日本の伝統色（純関数・LLM不使用）
+from synesthesia import estimate_palette
 
 # .env を自分のパス基準でロード（app.py より先にインポートされるため）
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -151,21 +153,33 @@ def stream_answer(
     user_message: str,
     history: List[dict],   # [{"role": "user"|"assistant", "content": str}, ...]
     top: int = 5,
-) -> tuple[Iterator[str], List[dict]]:
+    synesthesia: bool = True,
+) -> tuple[Iterator[str], List[dict], dict | None]:
     """
     Returns:
-        (token_stream, source_chunks)
+        (token_stream, source_chunks, palette)
+        palette は共感覚パレット（synesthesia.py 参照）。synesthesia=False なら None。
     """
     # 検索は変換指示語を除いた「内容」で引く（生成には下の augmented_user でフル原文を渡す）
     chunks = search_chunks(search_query(user_message), top=top)
     context = format_context(chunks)
 
+    # 共感覚: 入力文と手本の情調を伝統色に写像。信号が弱ければ hint は None。
+    palette = None
+    if synesthesia:
+        palette = estimate_palette(user_message, [c.get("text", "") for c in chunks])
+        # 各手本チャンクに色を付与（sources 表示用。追加キーはクライアント側で無害）
+        for c, sc in zip(chunks, palette.pop("sources")):
+            c["color"], c["color_name"] = sc["hex"], sc["name"]
+
+    hint_line = f"{palette['hint']}\n" if palette and palette.get("hint") else ""
     augmented_user = (
         f"【文体参照例（語彙・文末・リズムの傾向把握のみに使うこと。内容・フレーズの転用禁止）】\n"
         f"{context}\n\n"
         f"---\n"
         f"上記は文体の傾向を掴むためだけの参考例である。内容はあなた自身の言葉で完全に新たに生成せよ。"
-        f"前置きは不要。変換・作文した文章そのものから書き始めよ。\n\n"
+        f"前置きは不要。変換・作文した文章そのものから書き始めよ。\n"
+        f"{hint_line}\n"
         f"{user_message}"
     )
 
@@ -177,7 +191,7 @@ def stream_answer(
     else:
         token_gen = _stream_openai(convo)
 
-    return token_gen, chunks
+    return token_gen, chunks, palette
 
 # ── プロバイダ別ストリーミング ───────────────────────────
 def _stream_anthropic(convo: List[dict]) -> Iterator[str]:

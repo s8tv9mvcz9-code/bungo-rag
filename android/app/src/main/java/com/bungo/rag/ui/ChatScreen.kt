@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,6 +40,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bungo.rag.ChatUiState
 import com.bungo.rag.ChatViewModel
 import com.bungo.rag.data.ChatMessage
+import com.bungo.rag.data.Palette
 import com.bungo.rag.data.Source
 
 private val EXAMPLES = listOf(
@@ -150,10 +155,56 @@ private fun MessageList(state: ChatUiState, listState: androidx.compose.foundati
             }
         }
 
+        // 共感覚パレット（直近の応答の情調 → 伝統色）
+        val palette = state.palette
+        if (palette != null && !state.isLoading) {
+            item { PaletteBar(palette) }
+        }
+
         // 参照元（直近の応答に対して）
         if (state.sources.isNotEmpty() && !state.isLoading) {
             item { SourcesCard(state.sources) }
         }
+    }
+}
+
+/** "#RRGGBB" → Compose Color（不正値は null）。
+ * parseColor は未知色名で IllegalArgumentException、空文字/短文字列で
+ * StringIndexOutOfBoundsException を投げるため RuntimeException で受ける。 */
+private fun parseHexColor(hex: String?): Color? = try {
+    if (hex.isNullOrBlank()) null
+    else Color(android.graphics.Color.parseColor(hex))
+} catch (_: RuntimeException) {
+    null
+}
+
+/** 共感覚の色帯: 入力色 → 連想色 → 手本色 のグラデーションと伝統色名 */
+@Composable
+private fun PaletteBar(palette: Palette) {
+    val colors = palette.stops.mapNotNull { parseHexColor(it) }
+    if (colors.size < 2) return
+    Column(Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(
+                    brush = Brush.horizontalGradient(colors),
+                    shape = RoundedCornerShape(4.dp),
+                )
+        )
+        val label = buildString {
+            append("情調 「${palette.blend?.name ?: ""}」")
+            if (palette.categories.isNotEmpty()) {
+                append("　—　${palette.categories.joinToString("・")}の氣配")
+            }
+        }
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -205,13 +256,27 @@ private fun SourcesCard(sources: List<Source>) {
             )
             if (expanded) {
                 sources.forEachIndexed { i, s ->
-                    Text(
-                        "[${i + 1}] ${s.title} / ${s.author}（${s.style}）",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 8.dp),
-                    )
+                    ) {
+                        // 共感覚: 手本の色点（旧サーバでは color=null → 表示なし）
+                        parseHexColor(s.color)?.let { dot ->
+                            Box(
+                                Modifier
+                                    .padding(end = 6.dp)
+                                    .size(10.dp)
+                                    .background(dot, CircleShape)
+                            )
+                        }
+                        Text(
+                            "[${i + 1}] ${s.title} / ${s.author}（${s.style}）" +
+                                (s.colorName?.let { "〔$it〕" } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Text(
                         s.text.take(160) + if (s.text.length > 160) "…" else "",
                         style = MaterialTheme.typography.bodyMedium,

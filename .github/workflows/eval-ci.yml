@@ -2,8 +2,8 @@ name: Eval CI
 # 決定的リンタ・検索ヘルパの純関数テスト（依存ゼロ・LLM不使用・$0）。
 # 品質ロードマップ 1-6 の「PRごとの回帰チェック」。秘密情報も外部通信も不要。
 on:
-  push: { paths: ["eval/**", "app/retrieval.py", ".github/workflows/eval-ci.yml"] }
-  pull_request: { paths: ["eval/**", "app/retrieval.py", ".github/workflows/eval-ci.yml"] }
+  push: { paths: ["eval/**", "app/retrieval.py", "app/synesthesia.py", ".github/workflows/eval-ci.yml"] }
+  pull_request: { paths: ["eval/**", "app/retrieval.py", "app/synesthesia.py", ".github/workflows/eval-ci.yml"] }
 permissions:
   contents: read
 jobs:
@@ -17,3 +17,4 @@ jobs:
         run: |
           python eval/test_linter.py
           python eval/test_retrieval.py
+          python eval/test_synesthesia.py

@@ -34,6 +34,7 @@ from azure.core.credentials import AzureKeyCredential
 # （rag.py と同一ロジック。ロードマップ3-1の一本化の一歩）
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 from retrieval import search_query, diversify  # noqa: E402
+from synesthesia import estimate_palette  # noqa: E402  共感覚（情調→伝統色）の確認用
 
 load_dotenv()
 
@@ -185,10 +186,17 @@ def main():
         print("検索結果が見つかりませんでした。")
         return
 
+    # 共感覚パレット（デバッグ表示。検索・生成には影響しない）
+    palette = estimate_palette(args.query, [r.get("text", "") for r in results])
+    src_colors = palette.pop("sources")
+    print(f"🎨 情調: 入力「{palette['input']['name']}」 → 連想「{palette['blend']['name']}」"
+          f" ← 手本「{palette['exemplar']['name']}」"
+          + (f"　（{'・'.join(palette['categories'])}）" if palette["categories"] else ""))
+
     print(f"📚 関連チャンク（{len(results)} 件）:")
     print("─" * 60)
-    for i, r in enumerate(results, 1):
-        print(f"\n[{i}] {r['title']} / {r['author']}  （{r.get('style','')}）")
+    for i, (r, sc) in enumerate(zip(results, src_colors), 1):
+        print(f"\n[{i}] {r['title']} / {r['author']}  （{r.get('style','')}／{sc['name']}）")
         print(r["text"][:200] + ("…" if len(r["text"]) > 200 else ""))
 
     if args.search_only:

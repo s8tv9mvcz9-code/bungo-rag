@@ -196,6 +196,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     history: List[ChatMessage] = Field(default_factory=list, max_length=MAX_HISTORY_ITEMS)
     top_k: int = Field(default=5, ge=1, le=MAX_TOP_K)
+    # 共感覚レイヤー（情調→伝統色）。省略時 ON。旧クライアントは送らない→既定で有効。
+    synesthesia: bool = True
 
 
 @app.get("/health")
@@ -211,18 +213,23 @@ def chat(req: ChatRequest, _rl: None = Depends(rate_limit)):
 
     def gen():
         try:
-            token_stream, sources = stream_answer(
+            token_stream, sources, palette = stream_answer(
                 user_message=req.message,
                 history=[m.model_dump() for m in req.history],
                 top=req.top_k,
+                synesthesia=req.synesthesia,
             )
             for token in token_stream:
                 yield json.dumps(
                     {"type": "token", "content": token}, ensure_ascii=False
                 ) + "\n"
-            yield json.dumps(
-                {"type": "sources", "sources": sources}, ensure_ascii=False
-            ) + "\n"
+            # 共感覚パレットは sources イベントの追加キーとして返す。
+            # 新イベント型を増やすと旧 Android が落ちる（未知 type は throw）ため、
+            # 既知イベントへの追加キー（両クライアントとも無視できる）に限定する。
+            sources_event = {"type": "sources", "sources": sources}
+            if palette is not None:
+                sources_event["palette"] = palette
+            yield json.dumps(sources_event, ensure_ascii=False) + "\n"
             yield json.dumps({"type": "done"}, ensure_ascii=False) + "\n"
         except Exception:  # noqa: BLE001 — クライアントに必ずエラーイベントを返す
             # 詳細（エンドポイント URL・モデル名・Azure エラー等）はサーバログのみに残し、

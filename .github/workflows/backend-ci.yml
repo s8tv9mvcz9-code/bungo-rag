@@ -6,17 +6,21 @@ on:
     paths:
       - "backend/main.py"
       - "backend/test_security.py"
+      - "backend/test_contract.py"
       - "backend/requirements.txt"
       - "app/rag.py"
       - "app/retrieval.py"
+      - "app/synesthesia.py"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     paths:
       - "backend/main.py"
       - "backend/test_security.py"
+      - "backend/test_contract.py"
       - "backend/requirements.txt"
       - "app/rag.py"
       - "app/retrieval.py"
+      - "app/synesthesia.py"
       - ".github/workflows/backend-ci.yml"
 permissions:
   contents: read
@@ -32,3 +36,5 @@ jobs:
         run: pip install -r requirements.txt -r backend/requirements.txt
       - name: Backend security regression tests
         run: python backend/test_security.py
+      - name: Backend contract tests (synesthesia / NDJSON)
+        run: python backend/test_contract.py

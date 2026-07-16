@@ -6,6 +6,7 @@ private struct RawEvent: Decodable {
     let type: String
     let content: String?
     let sources: [Source]?
+    let palette: Palette?
     let message: String?
 }
 
@@ -49,7 +50,7 @@ final class BungoAPI {
             case "token":
                 if let c = raw.content { onEvent(.token(c)) }
             case "sources":
-                onEvent(.sources(raw.sources ?? []))
+                onEvent(.sources(raw.sources ?? [], raw.palette))
             case "done":
                 onEvent(.done)
             case "error":

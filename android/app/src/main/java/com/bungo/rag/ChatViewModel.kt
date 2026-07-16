@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bungo.rag.data.BungoApi
 import com.bungo.rag.data.ChatMessage
 import com.bungo.rag.data.ChatRequest
+import com.bungo.rag.data.Palette
 import com.bungo.rag.data.Source
 import com.bungo.rag.data.StreamEvent
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,7 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val streaming: String? = null,          // 生成中の暫定アシスタント応答
     val sources: List<Source> = emptyList(),
+    val palette: Palette? = null,           // 共感覚パレット（情調→伝統色）
     val isLoading: Boolean = false,
     val error: String? = null,
 )
@@ -40,6 +42,7 @@ class ChatViewModel : ViewModel() {
                 messages = it.messages + ChatMessage("user", message),
                 streaming = "",
                 sources = emptyList(),
+                palette = null,
                 isLoading = true,
                 error = null,
             )
@@ -58,7 +61,9 @@ class ChatViewModel : ViewModel() {
                                 _ui.update { it.copy(streaming = builder.toString()) }
                             }
                             is StreamEvent.Sources ->
-                                _ui.update { it.copy(sources = event.sources) }
+                                _ui.update {
+                                    it.copy(sources = event.sources, palette = event.palette)
+                                }
                             is StreamEvent.Error ->
                                 _ui.update { it.copy(error = event.message) }
                             StreamEvent.Done -> Unit

@@ -6,6 +6,7 @@ final class ChatViewModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var streaming: String? = nil
     @Published var sources: [Source] = []
+    @Published var palette: Palette? = nil   // 共感覚パレット（情調→伝統色）
     @Published var isLoading: Bool = false
     @Published var errorText: String? = nil
 
@@ -19,6 +20,7 @@ final class ChatViewModel: ObservableObject {
         messages.append(ChatMessage(role: "user", content: trimmed))
         streaming = ""
         sources = []
+        palette = nil
         errorText = nil
         isLoading = true
 
@@ -31,8 +33,9 @@ final class ChatViewModel: ObservableObject {
                     switch event {
                     case .token(let content):
                         self.streaming = (self.streaming ?? "") + content
-                    case .sources(let newSources):
+                    case .sources(let newSources, let newPalette):
                         self.sources = newSources
+                        self.palette = newPalette
                     case .done:
                         if let finalText = self.streaming {
                             self.messages.append(ChatMessage(role: "assistant", content: finalText))
